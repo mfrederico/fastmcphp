@@ -1,0 +1,9 @@
+parameters:
+    level: 5
+    paths:
+        - src
+        - tests
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        # Swoole/OpenSwoole extension functions - available at runtime
+        - '#Function Swoole\\Coroutine\\run not found\.#'
