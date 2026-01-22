@@ -135,6 +135,54 @@ class Server
     }
 
     /**
+     * Get all registered tools.
+     *
+     * @return array<string, Tool>
+     */
+    public function getTools(): array
+    {
+        return $this->tools;
+    }
+
+    /**
+     * Get all registered resources.
+     *
+     * @return array<string, Resource>
+     */
+    public function getResources(): array
+    {
+        return $this->resources;
+    }
+
+    /**
+     * Get all registered resource templates.
+     *
+     * @return array<string, ResourceTemplate>
+     */
+    public function getResourceTemplates(): array
+    {
+        return $this->resourceTemplates;
+    }
+
+    /**
+     * Get all registered prompts.
+     *
+     * @return array<string, Prompt>
+     */
+    public function getPrompts(): array
+    {
+        return $this->prompts;
+    }
+
+    /**
+     * Get the server name.
+     */
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    /**
      * Handle a JSON-RPC message and return the response.
      *
      * @param AuthRequest|null $authRequest Optional auth request for HTTP transports

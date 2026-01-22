@@ -1,0 +1,42 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * FastMCP PHP CLI
+ *
+ * Usage:
+ *   fastmcphp run server.php           Run an MCP server
+ *   fastmcphp dev server.php           Run with MCP Inspector
+ *   fastmcphp inspect server.php       Inspect server capabilities
+ *   fastmcphp install:claude-desktop   Install in Claude Desktop
+ *   fastmcphp version                  Show version info
+ */
+
+// Find autoloader
+$autoloadPaths = [
+    __DIR__ . '/../vendor/autoload.php',           // Local development
+    __DIR__ . '/../../../autoload.php',            // Installed as dependency
+    __DIR__ . '/../../../../vendor/autoload.php',  // Nested vendor
+];
+
+$autoloader = null;
+foreach ($autoloadPaths as $path) {
+    if (file_exists($path)) {
+        $autoloader = $path;
+        break;
+    }
+}
+
+if ($autoloader === null) {
+    fwrite(STDERR, "Error: Could not find autoloader. Run 'composer install' first.\n");
+    exit(1);
+}
+
+require $autoloader;
+
+use Fastmcphp\Cli\Application;
+
+$app = new Application();
+$app->run();

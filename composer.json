@@ -6,7 +6,8 @@
     "keywords": ["mcp", "model-context-protocol", "swoole", "ai", "llm"],
     "require": {
         "php": ">=8.2",
-        "psr/log": "^3.0"
+        "psr/log": "^3.0",
+        "symfony/console": "^7.4"
     },
     "suggest": {
         "ext-swoole": "Required for HTTP and SSE transports (Swoole 5.0+)",
@@ -34,5 +35,6 @@
     "config": {
         "sort-packages": true
     },
-    "minimum-stability": "stable"
+    "minimum-stability": "stable",
+    "bin": ["bin/fastmcphp"]
 }

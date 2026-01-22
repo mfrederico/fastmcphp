@@ -264,13 +264,18 @@ PROMPT),
 // RUN SERVER
 // ============================================================================
 
-// Determine transport from command line
-$transport = $argv[1] ?? 'stdio';
+// Return server for CLI tools, or run if invoked directly
+if (php_sapi_name() === 'cli' && realpath($_SERVER['argv'][0] ?? '') === realpath(__FILE__)) {
+    // Determine transport from command line
+    $transport = $argv[1] ?? 'stdio';
 
-echo "Starting Comprehensive Demo Server with {$transport} transport...\n";
+    echo "Starting Comprehensive Demo Server with {$transport} transport...\n";
 
-$mcp->run(
-    transport: $transport,
-    host: '0.0.0.0',
-    port: 8080,
-);
+    $mcp->run(
+        transport: $transport,
+        host: '0.0.0.0',
+        port: 8080,
+    );
+}
+
+return $mcp;

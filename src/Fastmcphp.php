@@ -269,6 +269,14 @@ class Fastmcphp
     }
 
     /**
+     * Get the server name.
+     */
+    public function getName(): string
+    {
+        return $this->server->getName();
+    }
+
+    /**
      * Get the underlying server instance.
      */
     public function getServer(): Server

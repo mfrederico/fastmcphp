@@ -78,5 +78,10 @@ $mcp->prompt(
     description: 'Generate an analysis prompt for a topic',
 );
 
-// Run with stdio transport (default)
-$mcp->run(transport: 'stdio');
+// Run with stdio transport (default) if invoked directly
+if (php_sapi_name() === 'cli' && realpath($_SERVER['argv'][0] ?? '') === realpath(__FILE__)) {
+    $mcp->run(transport: 'stdio');
+}
+
+// Return server for CLI tools
+return $mcp;

@@ -71,9 +71,13 @@ $mcp->tool(
     description: 'Divide a by b',
 );
 
-// Run with HTTP transport
-$mcp->run(
-    transport: 'http',
-    host: '0.0.0.0',
-    port: 8080,
-);
+// Run with HTTP transport if invoked directly
+if (php_sapi_name() === 'cli' && realpath($_SERVER['argv'][0] ?? '') === realpath(__FILE__)) {
+    $mcp->run(
+        transport: 'http',
+        host: '0.0.0.0',
+        port: 8080,
+    );
+}
+
+return $mcp;

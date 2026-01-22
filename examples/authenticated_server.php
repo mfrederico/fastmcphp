@@ -46,7 +46,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/auth/BearerTokenAuthProvider.php';
+require_once __DIR__ . '/Auth/BearerTokenAuthProvider.php';
 
 use Fastmcphp\Fastmcphp;
 use Fastmcphp\Server\Auth\AuthorizationContext;
@@ -183,11 +183,16 @@ $mcp->resource(
     auth: fn(AuthorizationContext $ctx) => $ctx->user->hasLevel(LEVEL_MEMBER),
 );
 
-echo "Starting authenticated server on http://localhost:8080\n";
-echo "Test tokens:\n";
-echo "  - user-token-123 (Alice, member level)\n";
-echo "  - admin-token-456 (Bob, admin level)\n";
-echo "  - limited-token-789 (Charlie, echo only)\n";
-echo "\n";
+// Run if invoked directly
+if (php_sapi_name() === 'cli' && realpath($_SERVER['argv'][0] ?? '') === realpath(__FILE__)) {
+    echo "Starting authenticated server on http://localhost:8080\n";
+    echo "Test tokens:\n";
+    echo "  - user-token-123 (Alice, member level)\n";
+    echo "  - admin-token-456 (Bob, admin level)\n";
+    echo "  - limited-token-789 (Charlie, echo only)\n";
+    echo "\n";
 
-$mcp->run(transport: 'http', port: 8080);
+    $mcp->run(transport: 'http', port: 8080);
+}
+
+return $mcp;
