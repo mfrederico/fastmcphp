@@ -13,6 +13,7 @@ use Fastmcphp\Cli\Commands\Install\ClaudeDesktopCommand;
 use Fastmcphp\Cli\Commands\Install\ClaudeCodeCommand;
 use Fastmcphp\Cli\Commands\Install\CursorCommand;
 use Fastmcphp\Cli\Commands\Install\McpJsonCommand;
+use Fastmcphp\Cli\Commands\Install\MyctoboCommand;
 
 /**
  * FastMCP PHP CLI Application.
@@ -38,6 +39,7 @@ class Application extends ConsoleApplication
         $this->add(new ClaudeCodeCommand());
         $this->add(new CursorCommand());
         $this->add(new McpJsonCommand());
+        $this->add(new MyctoboCommand());
     }
 
     /**
