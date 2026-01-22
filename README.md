@@ -7,7 +7,7 @@ Inspired by [FastMCP](https://github.com/jlowin/fastmcp) for Python.
 ## Requirements
 
 - PHP 8.2+
-- Swoole extension 5.0+
+- Swoole extension 5.0+ || OpenSwoole 4.0
 
 ## Installation
 
