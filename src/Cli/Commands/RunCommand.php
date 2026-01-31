@@ -123,13 +123,7 @@ class RunCommand extends Command
 
         // Run server
         try {
-            $options = [
-                'host' => $host,
-                'port' => $port,
-                'stateless' => $stateless,
-            ];
-
-            $mcp->run(transport: $transport, options: $options);
+            $mcp->run(transport: $transport, host: $host, port: $port);
         } catch (\Throwable $e) {
             $io->error("Server error: {$e->getMessage()}");
             return Command::FAILURE;

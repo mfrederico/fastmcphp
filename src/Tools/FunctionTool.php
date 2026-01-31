@@ -114,7 +114,7 @@ final class FunctionTool implements Tool
 
         $schema = [
             'type' => 'object',
-            'properties' => $properties,
+            'properties' => empty($properties) ? new \stdClass() : $properties,
         ];
 
         if (!empty($required)) {

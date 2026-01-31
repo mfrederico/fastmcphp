@@ -164,4 +164,18 @@ class AuthRequest
     {
         return new self();
     }
+
+    /**
+     * Create a new AuthRequest with merged query params.
+     * Used by SSE transport to inject session auth context into message requests.
+     */
+    public function withQueryParams(array $params): self
+    {
+        return new self(
+            headers: $this->headers,
+            query: array_merge($params, $this->query),
+            body: $this->body,
+            extra: $this->extra,
+        );
+    }
 }

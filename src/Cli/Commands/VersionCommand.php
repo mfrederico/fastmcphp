@@ -54,15 +54,18 @@ class VersionCommand extends Command
      */
     private function gatherVersionInfo(): array
     {
-        $swooleVersion = extension_loaded('swoole')
-            ? phpversion('swoole') ?: 'unknown'
-            : 'not installed';
+        $swooleVersion = 'not installed';
+        if (extension_loaded('swoole')) {
+            $swooleVersion = 'Swoole ' . (phpversion('swoole') ?: 'unknown');
+        } elseif (extension_loaded('openswoole')) {
+            $swooleVersion = 'OpenSwoole ' . (phpversion('openswoole') ?: 'unknown');
+        }
 
         return [
             'fastmcphp' => Application::VERSION,
             'mcp' => Application::getMcpVersion(),
             'php' => PHP_VERSION,
-            'swoole' => $swooleVersion,
+            'swoole/openswoole' => $swooleVersion,
             'platform' => php_uname('s') . ' ' . php_uname('m'),
             'root' => Application::getRootPath(),
         ];

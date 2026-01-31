@@ -26,6 +26,8 @@ class SseTransport implements TransportInterface
 {
     private ?SwooleHttpServer $httpServer = null;
     private ?Table $sessions = null;
+    /** @var array<string, array> Session auth context (in-memory) */
+    private array $sessionAuth = [];
 
     public function __construct(
         private readonly string $host = '0.0.0.0',
@@ -40,12 +42,22 @@ class SseTransport implements TransportInterface
         $this->sessions = new Table(1024);
         $this->sessions->column('response_fd', Table::TYPE_INT);
         $this->sessions->column('created_at', Table::TYPE_INT);
+        $this->sessions->column('token', Table::TYPE_STRING, 128);
+        $this->sessions->column('workspace', Table::TYPE_STRING, 64);
         $this->sessions->create();
 
         $this->httpServer = new SwooleHttpServer($this->host, $this->port);
 
+        // Get CPU count - compatible with both Swoole and OpenSwoole
+        $cpuNum = 4; // sensible default
+        if (function_exists('swoole_cpu_num')) {
+            $cpuNum = swoole_cpu_num();
+        } elseif (class_exists('OpenSwoole\Util')) {
+            $cpuNum = \OpenSwoole\Util::getCPUNum();
+        }
+
         $this->httpServer->set([
-            'worker_num' => swoole_cpu_num(),
+            'worker_num' => $cpuNum,
             'enable_coroutine' => true,
         ]);
 
@@ -120,26 +132,54 @@ class SseTransport implements TransportInterface
         $response->header('Connection', 'keep-alive');
         $response->header('X-Accel-Buffering', 'no');
 
-        // Store session
+        // Extract token and workspace from SSE connection
+        $token = $request->get['token'] ?? $request->header['x-api-token'] ?? '';
+        $workspace = $request->get['workspace'] ?? $request->header['x-workspace'] ?? 'default';
+
+        // Store session with auth context in shared table (accessible across workers)
         $this->sessions->set($sessionId, [
             'response_fd' => $response->fd,
             'created_at' => time(),
+            'token' => $token,
+            'workspace' => $workspace,
         ]);
 
+        // Also store in local array for this worker (for query params injection)
+        $this->sessionAuth[$sessionId] = [
+            'query' => $request->get ?? [],
+            'headers' => $request->header ?? [],
+        ];
+
         // Send initial event with session ID
+        // Use Host header if available, otherwise fall back to localhost (not 0.0.0.0)
+        $clientHost = $request->header['host'] ?? "localhost:{$this->port}";
+        // Remove port from host header if it's already there, then add our port
+        $hostWithoutPort = preg_replace('/:\d+$/', '', $clientHost);
+        $messageUri = "http://{$hostWithoutPort}:{$this->port}{$this->messagePath}?sessionId={$sessionId}";
+
         $this->sendSseEvent($response, 'endpoint', json_encode([
-            'uri' => "http://{$this->host}:{$this->port}{$this->messagePath}?sessionId={$sessionId}",
+            'uri' => $messageUri,
         ]));
 
         // Keep connection alive
         while (true) {
-            // Send heartbeat
-            $this->sendSseEvent($response, 'ping', json_encode(['time' => time()]));
-
             Coroutine::sleep(15);
 
-            // Check if connection is still alive
-            if (!$this->httpServer->exist($response->fd)) {
+            // Check if connection is still alive (compatible with Swoole and OpenSwoole)
+            try {
+                // Try to get connection info - returns false/null if disconnected
+                $info = method_exists($this->httpServer, 'exist')
+                    ? $this->httpServer->exist($response->fd)
+                    : $this->httpServer->getClientInfo($response->fd);
+
+                if (!$info) {
+                    break;
+                }
+
+                // Send heartbeat
+                $this->sendSseEvent($response, 'ping', json_encode(['time' => time()]));
+            } catch (\Throwable $e) {
+                // Connection closed
                 break;
             }
         }
@@ -164,7 +204,9 @@ class SseTransport implements TransportInterface
     {
         $sessionId = $request->get['sessionId'] ?? null;
 
-        if ($sessionId === null || !$this->sessions->exist($sessionId)) {
+        // Check session exists and get stored auth data from shared table
+        $sessionData = $sessionId !== null ? $this->sessions->get($sessionId) : false;
+        if ($sessionData === false) {
             $response->status(400);
             $response->end(json_encode(['error' => 'Invalid or missing session ID']));
             return;
@@ -186,8 +228,22 @@ class SseTransport implements TransportInterface
         try {
             $message = JsonRpc::parse($body);
 
-            // Create auth request from HTTP request
+            // Build auth context from shared table (works across workers)
+            // Note: AuthRequest::getToken() checks 'key' query param, so use that
+            $authParams = [];
+            if (!empty($sessionData['token'])) {
+                $authParams['key'] = $sessionData['token'];  // 'key' is what AuthRequest expects
+                $authParams['token'] = $sessionData['token']; // Also keep as 'token' for compatibility
+            }
+            if (!empty($sessionData['workspace'])) {
+                $authParams['workspace'] = $sessionData['workspace'];
+            }
+
+            // Create auth request and inject session's auth context
             $authRequest = AuthRequest::fromSwoole($request);
+            if (!empty($authParams)) {
+                $authRequest = $authRequest->withQueryParams($authParams);
+            }
 
             $result = $server->handle($message, $authRequest);
 

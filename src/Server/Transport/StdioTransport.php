@@ -8,7 +8,6 @@ use Fastmcphp\Protocol\JsonRpc;
 use Fastmcphp\Protocol\JsonRpcException;
 use Fastmcphp\Protocol\ErrorCodes;
 use Fastmcphp\Server\Server;
-use Swoole\Coroutine;
 
 /**
  * Stdio transport for MCP - communicates via stdin/stdout.
@@ -28,7 +27,7 @@ class StdioTransport implements TransportInterface
     {
         $this->running = true;
 
-        if ($this->useSwoole && extension_loaded('swoole')) {
+        if ($this->useSwoole && (extension_loaded('swoole') || extension_loaded('openswoole'))) {
             $this->runWithSwoole($server);
         } else {
             $this->runBlocking($server);
@@ -36,11 +35,13 @@ class StdioTransport implements TransportInterface
     }
 
     /**
-     * Run with Swoole coroutines.
+     * Run with Swoole/OpenSwoole coroutines.
      */
     private function runWithSwoole(Server $server): void
     {
-        Coroutine\run(function () use ($server) {
+        // Swoole\Coroutine::run() works with both Swoole and OpenSwoole
+        // OpenSwoole provides Swoole namespace aliases for compatibility
+        \Swoole\Coroutine::run(function () use ($server) {
             // Set stdin to non-blocking
             stream_set_blocking(STDIN, false);
 
@@ -52,7 +53,8 @@ class StdioTransport implements TransportInterface
 
                 if ($chunk === false || $chunk === '') {
                     // No data available, yield to other coroutines
-                    Coroutine::sleep(0.01);
+                    // Use usleep for sub-second sleeps (compatible with both Swoole and OpenSwoole)
+                    usleep(10000); // 10ms
                     continue;
                 }
 

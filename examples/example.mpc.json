@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "fastmcphp-echo": {
+      "command": "php",
+      "args": ["examples/echo_server.php"]
+    },
+    "fastmcphp-comprehensive": {
+      "type": "http",
+      "url": "http://127.0.0.1:9090/mcp",
+      "headers": {
+        "X-API-Token": "tk_8491a3f4ce1e2ea178736514a33b5857631f02d8cb3ae09c6b45a2e49cb95c09",
+        "X-Workspace": "dev"
+      }
+    }
+  }
+}

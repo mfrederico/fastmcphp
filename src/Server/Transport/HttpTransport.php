@@ -32,8 +32,16 @@ class HttpTransport implements TransportInterface
     {
         $this->httpServer = new SwooleHttpServer($this->host, $this->port);
 
+        // Get CPU count - compatible with both Swoole and OpenSwoole
+        $cpuNum = 4; // sensible default
+        if (function_exists('swoole_cpu_num')) {
+            $cpuNum = swoole_cpu_num();
+        } elseif (class_exists('OpenSwoole\Util')) {
+            $cpuNum = \OpenSwoole\Util::getCPUNum();
+        }
+
         $this->httpServer->set([
-            'worker_num' => swoole_cpu_num(),
+            'worker_num' => $cpuNum,
             'enable_coroutine' => true,
         ]);
 

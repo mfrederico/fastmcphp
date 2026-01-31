@@ -362,7 +362,7 @@ class Server
         $result = [
             'protocolVersion' => self::PROTOCOL_VERSION,
             'capabilities' => (object) $capabilities,
-            'serverInfo' => [
+            'serverInfo' => (object) [
                 'name' => $this->name,
                 'version' => $this->version,
             ],
