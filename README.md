@@ -1,5 +1,9 @@
 # Fastmcphp
 
+## NOTE: 
+- sse is deprecated according to anthropic: https://code.claude.com/docs/en/mcp#option-2%3A-add-a-remote-sse-server
+- use http instead
+
 A PHP 8.2+ implementation of the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) using Swoole.
 
 Inspired by [FastMCP](https://github.com/jlowin/fastmcp) for Python.
