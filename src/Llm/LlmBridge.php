@@ -108,6 +108,10 @@ class LlmBridge
 
                 // Convert headers object to array format
                 foreach ($serverConfig['headers'] ?? [] as $key => $value) {
+                    // Override X-Workspace with current workspace if set
+                    if ($this->workspace && strcasecmp($key, 'X-Workspace') === 0) {
+                        $value = $this->workspace;
+                    }
                     // Support variable substitution for workspace
                     if ($this->workspace) {
                         $value = str_replace('{workspace}', $this->workspace, $value);
@@ -175,9 +179,18 @@ class LlmBridge
      */
     public function connectMcpHttp(string $name, string $endpoint, array $headers = []): bool
     {
-        // Add workspace header if set
+        // Add workspace header if set (and not already present from config)
         if ($this->workspace) {
-            $headers[] = "X-Workspace: {$this->workspace}";
+            $hasWorkspaceHeader = false;
+            foreach ($headers as $h) {
+                if (stripos($h, 'X-Workspace:') === 0) {
+                    $hasWorkspaceHeader = true;
+                    break;
+                }
+            }
+            if (!$hasWorkspaceHeader) {
+                $headers[] = "X-Workspace: {$this->workspace}";
+            }
         }
 
         $client = McpClient::http($name, $endpoint, $headers, $this->logger);
@@ -356,10 +369,9 @@ class LlmBridge
                     'type' => 'function',
                     'function' => [
                         'name' => $tc['name'],
-                        // Ensure empty args encode as {} not []
-                        'arguments' => json_encode(
-                            empty($tc['arguments']) ? (object)[] : $tc['arguments']
-                        ),
+                        // Ollama expects arguments as object, not JSON string
+                        // (OpenAI expects string, but we're using Ollama's native API)
+                        'arguments' => empty($tc['arguments']) ? (object)[] : $tc['arguments'],
                     ],
                 ], $response->getToolCalls()),
             ];
