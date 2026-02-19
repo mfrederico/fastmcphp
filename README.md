@@ -271,6 +271,52 @@ $mcp->tool(
 );
 ```
 
+## Usage with Claude Code
+
+Add your MCP server to `.mcp.json` in your project root (or `~/.claude/.mcp.json` for global access):
+
+**Stdio transport** (subprocess — Claude Code manages the process):
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "php",
+      "args": ["path/to/your/server.php"]
+    }
+  }
+}
+```
+
+**HTTP transport** (remote — start the server separately):
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "type": "http",
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+**HTTP with authentication:**
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "type": "http",
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer your-token-here"
+      }
+    }
+  }
+}
+```
+
 ## Testing
 
 ```bash
