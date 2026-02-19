@@ -1,17 +1,18 @@
 {
     "name": "fastmcphp/fastmcphp",
-    "description": "PHP implementation of the Model Context Protocol (MCP) using Swoole",
+    "description": "PHP implementation of the Model Context Protocol (MCP)",
     "type": "library",
     "license": "MIT",
     "keywords": ["mcp", "model-context-protocol", "swoole", "ai", "llm"],
     "require": {
         "php": ">=8.2",
         "psr/log": "^3.0",
+        "react/http": "^1.9",
         "symfony/console": "^6.0 || ^7.4"
     },
     "suggest": {
-        "ext-swoole": "Required for HTTP and SSE transports (Swoole 5.0+)",
-        "ext-openswoole": "Alternative to Swoole - Required for HTTP and SSE transports (OpenSwoole 4.0+)"
+        "ext-swoole": "Higher performance for HTTP and SSE transports (Swoole 5.0+)",
+        "ext-openswoole": "Alternative to Swoole for HTTP and SSE transports (OpenSwoole 4.0+)"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.0",

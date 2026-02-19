@@ -1,17 +1,17 @@
 # Fastmcphp
 
-## NOTE: 
+## NOTE:
 - sse is deprecated according to anthropic: https://code.claude.com/docs/en/mcp#option-2%3A-add-a-remote-sse-server
 - use http instead
 
-A PHP 8.2+ implementation of the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) using Swoole.
+A PHP 8.2+ implementation of the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
 
 Inspired by [FastMCP](https://github.com/jlowin/fastmcp) for Python.
 
 ## Requirements
 
 - PHP 8.2+
-- Swoole extension 5.0+ || OpenSwoole 4.0
+- Swoole 5.0+ or OpenSwoole 4.0+ (optional, recommended for production HTTP/SSE)
 
 ## Installation
 
@@ -111,12 +111,14 @@ Three transport modes are supported:
 // Stdio (default) - for subprocess communication
 $mcp->run(transport: 'stdio');
 
-// HTTP - Swoole HTTP server
+// HTTP - JSON-RPC over HTTP (falls back to built-in PHP server without Swoole)
 $mcp->run(transport: 'http', host: '0.0.0.0', port: 8080);
 
-// SSE - Server-Sent Events
+// SSE - Server-Sent Events (deprecated, use HTTP instead)
 $mcp->run(transport: 'sse', host: '0.0.0.0', port: 8080);
 ```
+
+The HTTP transport automatically detects whether Swoole/OpenSwoole is installed. With Swoole, it runs a high-performance async server with multiple workers. Without Swoole, it uses ReactPHP's event-loop-based HTTP server (async, single-process). Swoole is recommended for production deployments.
 
 ### Authentication
 
@@ -157,6 +159,48 @@ class MyAuthProvider implements AuthProviderInterface
 
 // Use the auth provider
 $mcp->setAuth(new MyAuthProvider(), required: true);
+```
+
+### AuthRequest
+
+`AuthRequest` is the abstraction layer between transports and authentication. It normalizes request data from any transport (Swoole HTTP, built-in PHP HTTP, SSE) so auth providers don't need to know transport details.
+
+**Token extraction** — use `getToken()` for automatic priority-based lookup:
+
+1. `X-API-TOKEN` header (via `getApiToken()`)
+2. `Authorization: Bearer <token>` header (via `getBearerToken()`)
+3. `?key=<token>` query parameter (via `getApiKeyFromQuery()`)
+
+**Available methods:**
+
+| Method | Description |
+|--------|-------------|
+| `getToken()` | Get token from any source (priority order above) |
+| `getHeader(string $name)` | Get any header value (case-insensitive) |
+| `getBearerToken()` | Extract token from `Authorization: Bearer` header |
+| `getApiToken()` | Get `X-API-TOKEN` header value |
+| `getApiKeyFromQuery(string $param = 'key')` | Get token from query parameter |
+| `getQuery(string $key)` | Get any query parameter |
+
+**Sending tokens from clients:**
+
+```bash
+# Using Authorization header (recommended)
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-token-here" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+# Using X-API-TOKEN header
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "X-API-TOKEN: your-token-here" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+# Using query parameter
+curl -X POST "http://localhost:8080/mcp?key=your-token-here" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
 ### Per-Tool Authorization

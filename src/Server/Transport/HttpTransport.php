@@ -9,18 +9,17 @@ use Fastmcphp\Protocol\JsonRpcException;
 use Fastmcphp\Protocol\ErrorCodes;
 use Fastmcphp\Server\Server;
 use Fastmcphp\Server\Auth\AuthRequest;
-use Swoole\Http\Server as SwooleHttpServer;
-use Swoole\Http\Request;
-use Swoole\Http\Response;
 
 /**
- * HTTP transport for MCP - uses Swoole HTTP server.
+ * HTTP transport for MCP - JSON-RPC over HTTP.
  *
- * This transport provides a JSON-RPC over HTTP endpoint for MCP.
+ * Uses Swoole/OpenSwoole when available for high-performance async handling,
+ * or ReactPHP as a pure-PHP async alternative.
  */
 class HttpTransport implements TransportInterface
 {
-    private ?SwooleHttpServer $httpServer = null;
+    /** @var mixed Server instance (Swoole or ReactPHP, typed as mixed to avoid class resolution) */
+    private mixed $httpServer = null;
 
     public function __construct(
         private readonly string $host = '0.0.0.0',
@@ -30,7 +29,19 @@ class HttpTransport implements TransportInterface
 
     public function run(Server $server): void
     {
-        $this->httpServer = new SwooleHttpServer($this->host, $this->port);
+        if (extension_loaded('swoole') || extension_loaded('openswoole')) {
+            $this->runWithSwoole($server);
+        } else {
+            $this->runWithReactPhp($server);
+        }
+    }
+
+    /**
+     * Run with Swoole/OpenSwoole HTTP server.
+     */
+    private function runWithSwoole(Server $server): void
+    {
+        $this->httpServer = new \Swoole\Http\Server($this->host, $this->port);
 
         // Get CPU count - compatible with both Swoole and OpenSwoole
         $cpuNum = 4; // sensible default
@@ -45,21 +56,21 @@ class HttpTransport implements TransportInterface
             'enable_coroutine' => true,
         ]);
 
-        $this->httpServer->on('start', function (SwooleHttpServer $http) {
-            echo "Fastmcphp HTTP server started at http://{$this->host}:{$this->port}{$this->path}\n";
+        $this->httpServer->on('start', function ($http) {
+            echo "Fastmcphp HTTP server (Swoole) started at http://{$this->host}:{$this->port}{$this->path}\n";
         });
 
-        $this->httpServer->on('request', function (Request $request, Response $response) use ($server) {
-            $this->handleRequest($server, $request, $response);
+        $this->httpServer->on('request', function (\Swoole\Http\Request $request, \Swoole\Http\Response $response) use ($server) {
+            $this->handleSwooleRequest($server, $request, $response);
         });
 
         $this->httpServer->start();
     }
 
     /**
-     * Handle an HTTP request.
+     * Handle a Swoole HTTP request.
      */
-    private function handleRequest(Server $server, Request $request, Response $response): void
+    private function handleSwooleRequest(Server $server, \Swoole\Http\Request $request, \Swoole\Http\Response $response): void
     {
         // Set CORS headers
         $response->header('Access-Control-Allow-Origin', '*');
@@ -110,10 +121,7 @@ class HttpTransport implements TransportInterface
 
         try {
             $message = JsonRpc::parse($body);
-
-            // Create auth request from HTTP request
             $authRequest = AuthRequest::fromSwoole($request);
-
             $result = $server->handle($message, $authRequest);
 
             $response->header('Content-Type', 'application/json');
@@ -139,8 +147,116 @@ class HttpTransport implements TransportInterface
         }
     }
 
+    /**
+     * Run with ReactPHP HTTP server.
+     */
+    private function runWithReactPhp(Server $server): void
+    {
+        $httpServer = new \React\Http\HttpServer(function (\Psr\Http\Message\ServerRequestInterface $request) use ($server) {
+            return $this->handleReactRequest($server, $request);
+        });
+
+        $socket = new \React\Socket\SocketServer("{$this->host}:{$this->port}");
+        $httpServer->listen($socket);
+
+        $this->httpServer = $socket;
+
+        echo "Fastmcphp HTTP server (ReactPHP) started at http://{$this->host}:{$this->port}{$this->path}\n";
+
+        // ReactPHP runs its own event loop — this blocks until stopped
+    }
+
+    /**
+     * Handle a ReactPHP HTTP request.
+     */
+    private function handleReactRequest(Server $server, \Psr\Http\Message\ServerRequestInterface $request): \React\Http\Message\Response
+    {
+        $corsHeaders = [
+            'Access-Control-Allow-Origin' => '*',
+            'Access-Control-Allow-Methods' => 'POST, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-API-TOKEN',
+        ];
+
+        $method = $request->getMethod();
+        $path = $request->getUri()->getPath();
+
+        // Handle preflight
+        if ($method === 'OPTIONS') {
+            return new \React\Http\Message\Response(204, $corsHeaders);
+        }
+
+        // Health check
+        if ($path === '/health') {
+            return new \React\Http\Message\Response(
+                200,
+                array_merge($corsHeaders, ['Content-Type' => 'application/json']),
+                json_encode(['status' => 'ok'])
+            );
+        }
+
+        // Route check
+        if ($path !== $this->path && $path !== $this->path . '/') {
+            return new \React\Http\Message\Response(404, $corsHeaders, 'Not Found');
+        }
+
+        // Method check
+        if ($method !== 'POST') {
+            return new \React\Http\Message\Response(405, $corsHeaders, 'Method Not Allowed');
+        }
+
+        $body = (string) $request->getBody();
+
+        if ($body === '') {
+            return new \React\Http\Message\Response(
+                400,
+                array_merge($corsHeaders, ['Content-Type' => 'application/json']),
+                JsonRpc::encodeError(null, ErrorCodes::INVALID_REQUEST, 'Empty request body')
+            );
+        }
+
+        try {
+            $message = JsonRpc::parse($body);
+
+            // Build headers array (PSR-7 returns arrays per header, flatten to first value)
+            $headers = [];
+            foreach ($request->getHeaders() as $name => $values) {
+                $headers[strtolower($name)] = $values[0] ?? '';
+            }
+
+            $queryParams = $request->getQueryParams();
+            /** @var array<string, string> $queryParams */
+            $authRequest = AuthRequest::fromHttp($headers, $queryParams, $body);
+
+            $result = $server->handle($message, $authRequest);
+
+            return new \React\Http\Message\Response(
+                200,
+                array_merge($corsHeaders, ['Content-Type' => 'application/json']),
+                $result ?? ''
+            );
+        } catch (JsonRpcException $e) {
+            return new \React\Http\Message\Response(
+                200, // JSON-RPC errors still return 200
+                array_merge($corsHeaders, ['Content-Type' => 'application/json']),
+                JsonRpc::encodeError(null, $e->getCode(), $e->getMessage(), $e->data)
+            );
+        } catch (\Throwable $e) {
+            return new \React\Http\Message\Response(
+                500,
+                array_merge($corsHeaders, ['Content-Type' => 'application/json']),
+                JsonRpc::encodeError(null, ErrorCodes::INTERNAL_ERROR, 'Internal error: ' . $e->getMessage())
+            );
+        }
+    }
+
     public function stop(): void
     {
-        $this->httpServer?->shutdown();
+        if ($this->httpServer !== null) {
+            if ($this->httpServer instanceof \React\Socket\SocketServer) {
+                $this->httpServer->close();
+            } else {
+                $this->httpServer->shutdown();
+            }
+        }
     }
 }
