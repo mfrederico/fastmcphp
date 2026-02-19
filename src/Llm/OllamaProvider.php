@@ -76,6 +76,7 @@ class OllamaProvider implements LlmProviderInterface
         $fullContent = '';
         $toolCalls = [];
         $inThinkBlock = false;
+        $ollamaError = null;
 
         $ch = curl_init("{$this->host}/api/chat");
         curl_setopt_array($ch, [
@@ -86,7 +87,7 @@ class OllamaProvider implements LlmProviderInterface
                 'Accept: application/x-ndjson',
             ],
             CURLOPT_TIMEOUT => 300,
-            CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$fullContent, &$toolCalls, &$inThinkBlock, $onChunk, $onToolCall) {
+            CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$fullContent, &$toolCalls, &$inThinkBlock, &$ollamaError, $onChunk, $onToolCall) {
                 $lines = explode("\n", $data);
                 foreach ($lines as $line) {
                     $line = trim($line);
@@ -94,6 +95,13 @@ class OllamaProvider implements LlmProviderInterface
 
                     $json = json_decode($line, true);
                     if (!$json) continue;
+
+                    // Handle Ollama-level errors (e.g., unauthorized, model not found)
+                    if (isset($json['error'])) {
+                        $ollamaError = $json['error'];
+                        error_log("[OllamaProvider] Ollama error: {$ollamaError}");
+                        return strlen($data);
+                    }
 
                     // Handle tool calls
                     if (isset($json['message']['tool_calls'])) {
@@ -138,10 +146,19 @@ class OllamaProvider implements LlmProviderInterface
 
         curl_exec($ch);
         $error = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
         if ($error) {
             return LlmResponse::error("Curl error: {$error}");
+        }
+
+        if ($ollamaError) {
+            return LlmResponse::error("Ollama error: {$ollamaError}");
+        }
+
+        if ($httpCode >= 400) {
+            return LlmResponse::error("Ollama HTTP {$httpCode}" . ($fullContent ? ": {$fullContent}" : ''));
         }
 
         if (!empty($toolCalls)) {
