@@ -22,6 +22,7 @@ use Fastmcphp\Tools\FunctionTool;
 use Fastmcphp\Resources\Resource;
 use Fastmcphp\Resources\ResourceTemplate;
 use Fastmcphp\Prompts\Prompt;
+use Fastmcphp\Server\Session\SessionStoreInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -36,6 +37,8 @@ class Server
     private MiddlewareChain $middlewareChain;
     private ?AuthProviderInterface $authProvider = null;
     private bool $authRequired = false;
+    private ?SessionStoreInterface $sessionStore = null;
+    private ?string $sessionId = null;
 
     /** @var array<string, Tool> */
     private array $tools = [];
@@ -74,6 +77,34 @@ class Server
     {
         $this->authProvider = $provider;
         $this->authRequired = $required;
+    }
+
+    /**
+     * Set a session store for persisting initialization state across requests.
+     *
+     * Required for stateless transports (PHP-FPM) where each request creates
+     * a new Server instance. Without this, the initialization check will fail
+     * on every non-initialize request.
+     */
+    public function setSessionStore(SessionStoreInterface $store): void
+    {
+        $this->sessionStore = $store;
+    }
+
+    /**
+     * Set the current MCP session ID (from mcp-session-id header).
+     *
+     * When combined with a session store, allows the Server to persist
+     * and restore initialization state across stateless HTTP requests.
+     */
+    public function setSessionId(string $sessionId): void
+    {
+        $this->sessionId = $sessionId;
+
+        // Restore initialization state from session store
+        if ($this->sessionStore !== null && $this->sessionStore->isInitialized($sessionId)) {
+            $this->initialized = true;
+        }
     }
 
     /**
@@ -350,6 +381,11 @@ class Server
     private function handleInitialize(Request $request): array
     {
         $this->initialized = true;
+
+        // Persist initialization state for stateless transports
+        if ($this->sessionStore !== null && $this->sessionId !== null) {
+            $this->sessionStore->markInitialized($this->sessionId);
+        }
 
         $capabilities = [
             'tools' => !empty($this->tools) ? new \stdClass() : null,
